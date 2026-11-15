@@ -125,6 +125,8 @@ recently updated open tasks and `latest_task` only when not already included.
 `has_more` means **additional open tasks**, not additional closed history. A
 project with only closed tasks still returns its latest task with
 `reason: "no_focus"`; only a project with no tasks returns `"empty_project"`.
+A candidate with an empty summary/next is not finished; an empty candidate list
+is not proof the request is done.
 Candidate and latest-task `updated_at` values are UTC Unix **milliseconds**.
 
 Fallback entries cap title/summary/next-action/blocker text at 120/240/200/200
