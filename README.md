@@ -9,6 +9,11 @@ Built in Rust with a CLI, stdio MCP server and library API. Each project has its
 own SQLite database. An optional registry shows project summaries without mixing
 their task state. No account, model API, embeddings or hosted database required.
 
+State is **machine-local**: it does not sync through Git or between machines or
+teammates. Each clone/worktree keeps its own task ledger. Devstate tracks work;
+cross-task rationale and gotchas can stay in repository docs or a separate memory
+tool. No memory-tool integration is required.
+
 ## Features
 
 - Create, focus, checkpoint, resume, finish or cancel tasks.
@@ -31,8 +36,16 @@ devstate --help
 ```
 
 Ensure Cargo's binary directory (normally `~/.cargo/bin`) is in `PATH`.
-For development, use `cargo run -- <arguments>` or `cargo build --locked` followed
-by `target/debug/devstate`. Local CLI/MCP use does not require a package release.
+After updating the checkout, refresh the installed binary with
+`cargo install --path . --locked --force`; pulling source alone does not update
+the executable on `PATH`.
+
+For development, use `cargo run --release --locked -- <arguments>` from this
+checkout so Cargo rebuilds changed source before running it. For a persistent
+CLI/MCP executable, use `cargo build --release --locked` and point the client at
+this checkout's `target/release/devstate` (`devstate.exe` on Windows). Rebuild
+after source changes and restart a running MCP server to load the new binary.
+Local CLI/MCP use does not require a package release.
 
 ## Quick start
 
@@ -106,6 +119,20 @@ Checkpoints replace the latest task state; they do not create session files.
 Keep returned revisions. A conflict requires a new read and reconciliation, never
 a blind retry with an incremented revision. Focus/close require project revision;
 checkpoint/close require task revision. Resume exposes the revisions you need.
+
+Without focus, `resume` keeps `task: null` and returns `fallback`: up to three
+recently updated open tasks and `latest_task` only when not already included.
+`has_more` means **additional open tasks**, not additional closed history. A
+project with only closed tasks still returns its latest task with
+`reason: "no_focus"`; only a project with no tasks returns `"empty_project"`.
+Candidate and latest-task `updated_at` values are UTC Unix **milliseconds**.
+
+Fallback entries cap title/summary/next-action/blocker text at 120/240/200/200
+Unicode characters and mark shortened entries with `truncated`. There are at
+most four entries, with no notes or evidence. These are character and item
+bounds, not a fixed byte or token budget; Unicode and JSON escaping affect size.
+Use the returned context before requesting another list, and retrieve task
+details only when needed. Actual billed-token savings require client measurements.
 
 Lists default to five items, capped at 50. Pass task-list `next_cursor` as one JSON
 `--cursor` argument with identical filters. Overview uses a root-path cursor.

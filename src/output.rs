@@ -194,6 +194,7 @@ fn resume_candidate(out: &mut String, task: &Value) {
     field(out, "Task ID", text(task, "id"));
     field(out, "Status", text(task, "status"));
     field(out, "Revision", &number(&task["revision"]));
+    field(out, "Updated (ms)", &number(&task["updated_at"]));
     field(out, "Summary", text(task, "summary"));
     field(out, "Next action", text(task, "next_action"));
     field(out, "Blockers", text(task, "blockers"));

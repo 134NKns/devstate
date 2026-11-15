@@ -184,10 +184,13 @@ fn mcp_writes_checkpoint_resume_and_close_with_revisions() {
     assert_eq!(fallback["reason"], "no_focus");
     assert_eq!(fallback["candidates"].as_array().unwrap().len(), 1);
     assert_eq!(fallback["candidates"][0]["title"], "Another task");
+    assert!(fallback["candidates"][0]["updated_at"].as_i64().unwrap() > 0);
     // Timestamp ties may make the open task latest; it is then deduplicated.
     if !fallback["latest_task"].is_null() {
         assert_eq!(fallback["latest_task"]["id"], task.id);
         assert_eq!(fallback["latest_task"]["summary"], "Documentation delivered");
+        assert_eq!(fallback["latest_task"]["updated_at"].as_i64().unwrap(),
+            store.get_task(&task.id).unwrap().unwrap().checkpoint.updated_at);
     }
     assert_eq!(fallback["has_more"], false);
     assert_eq!(store.get_task(&task.id).unwrap().unwrap().checkpoint.status, "done");

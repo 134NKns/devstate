@@ -135,11 +135,13 @@ fn resume_without_focus_returns_bounded_discovery_without_mutating_state() {
     assert_eq!(fallback["reason"], "no_focus");
     assert_eq!(fallback["has_more"], true);
     assert_eq!(fallback["latest_task"]["id"], "closed");
+    assert_eq!(fallback["latest_task"]["updated_at"], 3000);
     let candidates = fallback["candidates"].as_array().unwrap();
     assert_eq!(candidates.iter().map(|task| task["id"].as_str().unwrap())
         .collect::<Vec<_>>(), ["d", "c", "b"]);
     for task in candidates {
         assert_eq!(task["revision"], 7);
+        assert_eq!(task["updated_at"], 2000);
         assert_eq!(task["truncated"], true);
         for (field, limit) in [("title", 120), ("summary", 240), ("next_action", 200), ("blockers", 200)] {
             assert_eq!(task[field].as_str().unwrap().chars().count(), limit);
@@ -154,7 +156,7 @@ fn resume_without_focus_returns_bounded_discovery_without_mutating_state() {
 
     let rendered = human(&sandbox.0, &["resume"]);
     let text = String::from_utf8(rendered.stdout).unwrap();
-    for label in ["Open task", "Latest work", "Next action", "More tasks", "devstate focus"] {
+    for label in ["Open task", "Latest work", "Next action", "Updated (ms)", "3000", "More tasks", "devstate focus"] {
         assert!(text.contains(label), "missing {label}: {text}");
     }
 
@@ -163,6 +165,7 @@ fn resume_without_focus_returns_bounded_discovery_without_mutating_state() {
     let deduplicated = success(&sandbox.0, &["resume", "--check"]);
     assert!(deduplicated["fallback"]["latest_task"].is_null());
     assert_eq!(deduplicated["fallback"]["candidates"][0]["id"], "d");
+    assert_eq!(deduplicated["fallback"]["candidates"][0]["updated_at"], 4000);
 
     // A project with only closed work is not an empty project.
     conn.execute("UPDATE tasks SET status = 'cancelled', closed_at = updated_at
@@ -172,6 +175,7 @@ fn resume_without_focus_returns_bounded_discovery_without_mutating_state() {
     assert_eq!(closed["fallback"]["candidates"], serde_json::json!([]));
     assert_eq!(closed["fallback"]["has_more"], false);
     assert_eq!(closed["fallback"]["latest_task"]["id"], "d");
+    assert_eq!(closed["fallback"]["latest_task"]["updated_at"], 4000);
 }
 
 #[test]

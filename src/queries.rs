@@ -46,6 +46,8 @@ pub struct ResumeCandidate {
     pub title: String,
     pub status: String,
     pub revision: i64,
+    /// UTC Unix milliseconds, matching other task timestamps.
+    pub updated_at: i64,
     pub summary: String,
     pub next_action: String,
     pub blockers: String,
@@ -271,7 +273,7 @@ impl Store {
                 }
             };
             let fallback = if task.is_none() {
-                let columns = "id, substr(title, 1, 120) AS title, status, revision,
+                let columns = "id, substr(title, 1, 120) AS title, status, revision, updated_at,
                     substr(summary, 1, 240) AS summary,
                     substr(next_action, 1, 200) AS next_action,
                     substr(blockers, 1, 200) AS blockers,
@@ -511,6 +513,7 @@ fn resume_candidate_from_row(row: &Row<'_>) -> rusqlite::Result<ResumeCandidate>
     Ok(ResumeCandidate {
         id: row.get("id")?, title: row.get("title")?, status: row.get("status")?,
         revision: row.get("revision")?, summary: row.get("summary")?,
+        updated_at: row.get("updated_at")?,
         next_action: row.get("next_action")?, blockers: row.get("blockers")?,
         truncated: row.get("truncated")?,
     })
