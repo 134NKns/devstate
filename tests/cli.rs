@@ -54,6 +54,10 @@ fn init_resume_and_runtime_errors_use_clean_json_channels() {
     sandbox.init();
     let resumed = success(&sandbox.0, &["resume"]);
     assert!(resumed["task"].is_null());
+    assert_eq!(resumed["fallback"]["reason"], "empty_project");
+    assert_eq!(resumed["fallback"]["candidates"], serde_json::json!([]));
+    assert_eq!(resumed["fallback"]["has_more"], false);
+    assert!(resumed["fallback"]["latest_task"].is_null());
     assert_eq!(resumed["project"]["name"], "CLI fixture");
     let repeated = run(&sandbox.0, &["init", "--name", "replacement"]);
     assert_eq!(repeated.status.code(), Some(1));
@@ -95,6 +99,7 @@ fn task_output_includes_models_tokens_elapsed_and_pagination() {
     assert_eq!(resumed["truncated_fields"][0], "summary");
     assert_eq!(resumed["task"]["summary"].as_str().unwrap().chars().count(), 240);
     assert!(resumed["task"].get("notes").is_none());
+    assert!(resumed.get("fallback").is_none());
     assert_eq!(success(&sandbox.0, &["tasks", "--kind", "bug"])["items"][0]["id"], "a");
     assert_eq!(success(&sandbox.0, &["search", "หมายเหตุ"])["items"][0]["id"], "a");
     assert_eq!(success(&sandbox.0, &["recent", "--limit", "1"])["items"][0]["id"], "b");
@@ -104,6 +109,69 @@ fn task_output_includes_models_tokens_elapsed_and_pagination() {
     assert_eq!(next["items"][0]["id"], "a");
     assert!(next["next_cursor"].is_null());
     assert!(!run(&sandbox.0, &["tasks", "--cursor", "invalid-json"]).status.success());
+}
+
+#[test]
+fn resume_without_focus_returns_bounded_discovery_without_mutating_state() {
+    let sandbox = Sandbox::new();
+    sandbox.init();
+    let conn = Connection::open(sandbox.0.join(".devstate/state.db")).unwrap();
+    for id in ["a", "b", "c", "d"] {
+        conn.execute(
+            "INSERT INTO tasks (id, title, summary, next_action, blockers, notes,
+                revision, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?4, 'Detail stays out of resume', 7, 1000, 2000)",
+            params![id, "ก".repeat(180), "ข".repeat(300), "ค".repeat(250)],
+        ).unwrap();
+    }
+    conn.execute(
+        "INSERT INTO tasks (id, title, status, created_at, updated_at, closed_at)
+         VALUES ('closed', 'Latest cancelled work', 'cancelled', 1000, 3000, 3000)", [],
+    ).unwrap();
+    let resumed = success(&sandbox.0, &["resume"]);
+    assert!(resumed["task"].is_null());
+    assert_eq!(resumed["project"]["revision"], 1);
+    let fallback = &resumed["fallback"];
+    assert_eq!(fallback["reason"], "no_focus");
+    assert_eq!(fallback["has_more"], true);
+    assert_eq!(fallback["latest_task"]["id"], "closed");
+    let candidates = fallback["candidates"].as_array().unwrap();
+    assert_eq!(candidates.iter().map(|task| task["id"].as_str().unwrap())
+        .collect::<Vec<_>>(), ["d", "c", "b"]);
+    for task in candidates {
+        assert_eq!(task["revision"], 7);
+        assert_eq!(task["truncated"], true);
+        for (field, limit) in [("title", 120), ("summary", 240), ("next_action", 200), ("blockers", 200)] {
+            assert_eq!(task[field].as_str().unwrap().chars().count(), limit);
+        }
+        assert!(task.get("notes").is_none());
+        assert!(task.get("verification_notes").is_none());
+    }
+    assert!(conn.query_row("SELECT focused_task_id FROM project", [],
+        |row| row.get::<_, Option<String>>(0)).unwrap().is_none());
+    assert_eq!(conn.query_row("SELECT sum(revision) FROM tasks", [],
+        |row| row.get::<_, i64>(0)).unwrap(), 29);
+
+    let rendered = human(&sandbox.0, &["resume"]);
+    let text = String::from_utf8(rendered.stdout).unwrap();
+    for label in ["Open task", "Latest work", "Next action", "More tasks", "devstate focus"] {
+        assert!(text.contains(label), "missing {label}: {text}");
+    }
+
+    // Latest work is omitted when it already appears among open candidates.
+    conn.execute("UPDATE tasks SET updated_at = 4000 WHERE id = 'd'", []).unwrap();
+    let deduplicated = success(&sandbox.0, &["resume", "--check"]);
+    assert!(deduplicated["fallback"]["latest_task"].is_null());
+    assert_eq!(deduplicated["fallback"]["candidates"][0]["id"], "d");
+
+    // A project with only closed work is not an empty project.
+    conn.execute("UPDATE tasks SET status = 'cancelled', closed_at = updated_at
+        WHERE status = 'todo'", []).unwrap();
+    let closed = success(&sandbox.0, &["resume"]);
+    assert_eq!(closed["fallback"]["reason"], "no_focus");
+    assert_eq!(closed["fallback"]["candidates"], serde_json::json!([]));
+    assert_eq!(closed["fallback"]["has_more"], false);
+    assert_eq!(closed["fallback"]["latest_task"]["id"], "d");
 }
 
 #[test]

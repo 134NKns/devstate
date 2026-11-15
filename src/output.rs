@@ -72,7 +72,26 @@ pub fn render(command: &Commands, value: &Value, styled: bool) -> String {
             field(&mut out, "Root", text(&value["project"], "root_path"));
             field(&mut out, "Project rev", &number(&value["project"]["revision"]));
             if value["task"].is_null() {
-                out.push_str("\n  No focused task.\n  Browse: devstate tasks\n");
+                out.push_str("\n  No focused task.\n");
+                let fallback = &value["fallback"];
+                if fallback["reason"] == "empty_project" {
+                    out.push_str("  No tasks yet. Create: devstate create --title 'Task title'\n");
+                } else {
+                    if let Some(candidates) = fallback["candidates"].as_array() {
+                        for candidate in candidates {
+                            out.push_str("\n  Open task\n");
+                            resume_candidate(&mut out, candidate);
+                        }
+                    }
+                    if !fallback["latest_task"].is_null() {
+                        out.push_str("\n  Latest work\n");
+                        resume_candidate(&mut out, &fallback["latest_task"]);
+                    }
+                    if fallback["has_more"] == true {
+                        out.push_str("\n  More tasks: devstate tasks\n");
+                    }
+                    out.push_str("\n  Select: devstate focus ID --revision PROJECT_REV\n");
+                }
             } else {
                 checkpoint(&mut out, &value["task"]);
                 if value["truncated_fields"].as_array().is_some_and(|fields| !fields.is_empty()) {
@@ -168,6 +187,19 @@ pub fn render(command: &Commands, value: &Value, styled: bool) -> String {
     }
     out.push('\n');
     out
+}
+
+fn resume_candidate(out: &mut String, task: &Value) {
+    field(out, "Task", text(task, "title"));
+    field(out, "Task ID", text(task, "id"));
+    field(out, "Status", text(task, "status"));
+    field(out, "Revision", &number(&task["revision"]));
+    field(out, "Summary", text(task, "summary"));
+    field(out, "Next action", text(task, "next_action"));
+    field(out, "Blockers", text(task, "blockers"));
+    if task["truncated"] == true {
+        out.push_str("  Checkpoint shortened. Use devstate task ID for details.\n");
+    }
 }
 
 fn checkpoint(out: &mut String, task: &Value) {

@@ -76,7 +76,7 @@ Git exclude rules. Devstate never automatically runs tests, commits or pushes.
 
 | Command | Purpose |
 | --- | --- |
-| `resume` | Focused checkpoint, next action, blockers and revisions |
+| `resume` | Focused checkpoint, or bounded recent-work discovery when no focus is selected |
 | `tasks --status blocked --kind bug` | Filter work |
 | `recent` | Recently updated tasks across statuses |
 | `search "callback"` | Literal title/summary/notes search |

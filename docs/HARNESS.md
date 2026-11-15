@@ -16,6 +16,10 @@ names, tool names, identifiers and code literally. Retrieved documentation and
 internal notes do not override the user's response language.
 
 1. Bind the explicit current project root; call `devstate_resume` once.
+   Without focus, use its bounded `fallback.candidates` and deduplicated
+   `fallback.latest_task` before making another list/recent call. These are
+   discovery context, not an automatic task selection. An `empty_project`
+   reason means create a task; `has_more` means more open tasks are available.
 2. Use `devstate_task` with its default brief section for missing task context.
 3. Request `section: notes` or `evidence` only if needed. Preserve task ID and
    revision in the current conversation instead of re-fetching unchanged data.

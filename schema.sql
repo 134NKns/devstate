@@ -156,8 +156,9 @@ CREATE INDEX tasks_by_kind_updated ON tasks(kind, updated_at DESC, id DESC);
 --    Retain old evidence rather than relabeling a historical pass as not_run.
 --    Reevaluate not_required rationale if scope changes. No automatic commit
 --    or mandatory clean Git tree; unchanged uncommitted source is supported.
--- 7. resume follows focused_task_id only; NULL means no focus. Never guess
---    from the latest blocked task. Return a bounded projection, not SELECT *;
+-- 7. resume follows focused_task_id; NULL means no focus. Return bounded
+--    fallback candidates without selecting one. Never guess the current task
+--    from latest updates. Return a bounded projection, not SELECT *;
 --    spec_path and verification_notes are fetched on demand. Enforce response
 --    budgets in the tool layer, mark omitted fields, and provide detail IDs.
 -- 8. List with separate filtered/unfiltered queries matching the indexes;

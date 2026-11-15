@@ -180,5 +180,15 @@ fn mcp_writes_checkpoint_resume_and_close_with_revisions() {
     assert_eq!(replies[5]["result"]["isError"], true);
     assert_eq!(replies[6]["result"]["isError"], false);
     assert!(replies[7]["result"]["structuredContent"]["task"].is_null());
+    let fallback = &replies[7]["result"]["structuredContent"]["fallback"];
+    assert_eq!(fallback["reason"], "no_focus");
+    assert_eq!(fallback["candidates"].as_array().unwrap().len(), 1);
+    assert_eq!(fallback["candidates"][0]["title"], "Another task");
+    // Timestamp ties may make the open task latest; it is then deduplicated.
+    if !fallback["latest_task"].is_null() {
+        assert_eq!(fallback["latest_task"]["id"], task.id);
+        assert_eq!(fallback["latest_task"]["summary"], "Documentation delivered");
+    }
+    assert_eq!(fallback["has_more"], false);
     assert_eq!(store.get_task(&task.id).unwrap().unwrap().checkpoint.status, "done");
 }

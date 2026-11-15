@@ -27,6 +27,29 @@ pub struct Resume {
     pub project: Project,
     /// None means no explicit focus; never guess from other tasks.
     pub task: Option<Checkpoint>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<ResumeFallback>,
+}
+
+/// Discovery context only; returning candidates never changes focus.
+#[derive(Debug, serde::Serialize)]
+pub struct ResumeFallback {
+    pub reason: &'static str,
+    pub candidates: Vec<ResumeCandidate>,
+    pub has_more: bool,
+    pub latest_task: Option<ResumeCandidate>,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct ResumeCandidate {
+    pub id: String,
+    pub title: String,
+    pub status: String,
+    pub revision: i64,
+    pub summary: String,
+    pub next_action: String,
+    pub blockers: String,
+    pub truncated: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -209,8 +232,8 @@ impl Store {
         })
     }
 
-    /// Follow the explicit focus with a primary-key lookup. Evidence and usage
-    /// details are fetched only by get_task, and spec files are never opened.
+    /// Follow explicit focus, or return bounded discovery context without
+    /// selecting a task. Notes, evidence and spec files are never opened.
     pub fn resume(&self) -> Result<Resume> {
         self.resume_with_freshness(false)
     }
@@ -247,7 +270,30 @@ impl Store {
                     Some(task)
                 }
             };
-            Ok(Resume { project, task })
+            let fallback = if task.is_none() {
+                let columns = "id, substr(title, 1, 120) AS title, status, revision,
+                    substr(summary, 1, 240) AS summary,
+                    substr(next_action, 1, 200) AS next_action,
+                    substr(blockers, 1, 200) AS blockers,
+                    (length(title) > 120 OR length(summary) > 240
+                     OR length(next_action) > 200 OR length(blockers) > 200) AS truncated";
+                let sql = format!("SELECT {columns} FROM tasks
+                    WHERE status NOT IN ('done', 'cancelled')
+                    ORDER BY updated_at DESC, id DESC LIMIT 4");
+                let mut candidates = conn.prepare_cached(&sql)?
+                    .query_map([], resume_candidate_from_row)?
+                    .collect::<rusqlite::Result<Vec<_>>>()?;
+                let has_more = candidates.len() > 3;
+                candidates.truncate(3);
+                let sql = format!("SELECT {columns} FROM tasks
+                    ORDER BY updated_at DESC, id DESC LIMIT 1");
+                let latest = conn.query_row(&sql, [], resume_candidate_from_row).optional()?;
+                let reason = if latest.is_none() { "empty_project" } else { "no_focus" };
+                let latest_task = latest.filter(|latest|
+                    !candidates.iter().any(|task| task.id == latest.id));
+                Some(ResumeFallback { reason, candidates, has_more, latest_task })
+            } else { None };
+            Ok(Resume { project, task, fallback })
         })
     }
 
@@ -458,5 +504,14 @@ fn overview_task_from_row(row: &Row<'_>) -> rusqlite::Result<OverviewTask> {
         status: row.get("status")?, summary: row.get("summary")?,
         next_action: row.get("next_action")?, truncated: row.get("truncated")?,
         updated_at: row.get("updated_at")?,
+    })
+}
+
+fn resume_candidate_from_row(row: &Row<'_>) -> rusqlite::Result<ResumeCandidate> {
+    Ok(ResumeCandidate {
+        id: row.get("id")?, title: row.get("title")?, status: row.get("status")?,
+        revision: row.get("revision")?, summary: row.get("summary")?,
+        next_action: row.get("next_action")?, blockers: row.get("blockers")?,
+        truncated: row.get("truncated")?,
     })
 }

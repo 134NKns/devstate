@@ -51,7 +51,7 @@ enum Commands {
         #[arg(long)]
         name: String,
     },
-    /// Resume only the explicitly focused task, with short checkpoint snippets.
+    /// Resume focused work, or discover recent tasks when no focus is selected.
     Resume {
         /// Explicitly recompute verification freshness from source.
         #[arg(long)]
@@ -241,8 +241,12 @@ fn run(cli: &Cli) -> Result<Value> {
                             }
                         }
                     }
-                    Ok(json!({"project": {"name":resume.project.name,"root_path":resume.project.root_path,"revision":resume.project.revision}, "task": resume.task,
-                        "truncated_fields": truncated_fields}))
+                    let mut value = json!({"project": {"name":resume.project.name,"root_path":resume.project.root_path,"revision":resume.project.revision}, "task": resume.task,
+                        "truncated_fields": truncated_fields});
+                    if let Some(fallback) = resume.fallback {
+                        value["fallback"] = serde_json::to_value(fallback)?;
+                    }
+                    Ok(value)
                 }
                 Commands::Task { id, section, check } => {
                     let task = if *check { store.get_task_checked(id)? } else { store.get_task(id)? }.ok_or("task not found in this project")?;

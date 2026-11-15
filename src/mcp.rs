@@ -140,7 +140,7 @@ fn tools() -> Vec<Value> {
             json!({"query":{"type":"string","default":"start"},"limit":{"type":"integer","minimum":1,"maximum":5,"default":2}}), &[], true, true),
         tool("devstate_init", "Initialize a project DB once; never overwrite.",
             json!({"root":root,"name":string}), &["root","name"], false, false),
-        tool("devstate_resume", "Focused task and short checkpoint. No global context.",
+        tool("devstate_resume", "Focused checkpoint; without focus, up to 3 open tasks and deduplicated latest work. Never selects a task.",
             json!({"root":root,"check":{"type":"boolean","default":false}}), &["root"], true, true),
         tool("devstate_task", "Brief task by default; request a detail section only when needed.",
             json!({"root":root,"id":string,"section":{"type":"string","enum":["brief","notes","evidence","usage","full"],"default":"brief"},"check":{"type":"boolean","default":false}}), &["root","id"], true, true),
